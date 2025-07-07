@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import FileUpload from './components/FileUpload';
 import FileList from './components/FileList';
+import NotFound from './components/NotFound';
 import { UploadIcon, FolderIcon } from './components/common/Icons';
 import "./index.css";
 
@@ -10,16 +11,35 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <header className="text-center mb-8 animate-fadeIn">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">
-            VISA Dossier
-          </h1>
-          <p className="text-lg text-gray-600 mb-8">
-            Professional Document Management System
-          </p>
-          
-          {/* Navigation */}
+      <Routes>
+        {/* Main Layout Routes */}
+        <Route path="/" element={<MainLayout />}>
+          <Route index element={<FileUploadPage />} />
+          <Route path="files" element={<FileListPage />} />
+        </Route>
+        
+        {/* 404 Route - This should be last */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </div>
+  );
+}
+
+function MainLayout() {
+  const location = useLocation();
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <header className="text-center mb-8 animate-fadeIn">
+        <h1 className="text-4xl font-bold text-gray-900 mb-3">
+          VISA Dossier
+        </h1>
+        <p className="text-lg text-gray-600 mb-8">
+          Professional Document Management System
+        </p>
+        
+        {/* Navigation */}
+        {(location.pathname === '/' || location.pathname === '/files') && (
           <nav className="flex justify-center space-x-2 bg-white rounded-xl p-2 shadow-lg inline-flex border">
             <Link
               to="/"
@@ -44,15 +64,15 @@ function App() {
               <span>View Files</span>
             </Link>
           </nav>
-        </header>
+        )}
+      </header>
 
-        <main className="animate-slideIn">
-          <Routes>
-            <Route path="/" element={<FileUploadPage />} />
-            <Route path="/files" element={<FileListPage />} />
-          </Routes>
-        </main>
-      </div>
+      <main className="animate-slideIn">
+        <Routes>
+          <Route path="/" element={<FileUploadPage />} />
+          <Route path="/files" element={<FileListPage />} />
+        </Routes>
+      </main>
     </div>
   );
 }
