@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useFileOperations } from '../hooks/UseFileOperations.js';
 import { LoadingSpinner } from './common/LoadingSpinner.jsx';
 import { ErrorMessage } from './common/ErrorMessage.jsx';
@@ -6,7 +6,7 @@ import { ErrorMessage } from './common/ErrorMessage.jsx';
 const API_URL = import.meta.env.VITE_API_URL;
 
 function FileList() {
-  const [files, setFiles] = useState({ images: [], pdfs: [], others: [] });
+  const [files, setFiles] = useState({ financial: [], travel: [], education: [], other: [] });
   const [deleteStatus, setDeleteStatus] = useState('');
   const { fetchFiles, deleteFile, loading, error, clearError } = useFileOperations();
 
@@ -34,7 +34,6 @@ function FileList() {
       setDeleteStatus('File deleted successfully');
       await loadFiles();
       
-      // Clear success message after 3 seconds
       setTimeout(() => setDeleteStatus(''), 3000);
     } catch (err) {
       setDeleteStatus('');
@@ -43,6 +42,26 @@ function FileList() {
   };
 
   const getFileUrl = (file) => `${API_URL.replace('/api', '')}/storage/${file.path}`;
+
+  const getUploadTypeLabel = (type) => {
+    const labels = {
+      financial: 'Financial Documents',
+      travel: 'Travel Documents', 
+      education: 'Education Documents',
+      other: 'Other Files'
+    };
+    return labels[type] || 'Unknown Type';
+  };
+
+  const getUploadTypeIcon = (type) => {
+    const icons = {
+      financial: '💰',
+      travel: '✈️',
+      education: '🎓',
+      other: '📁'
+    };
+    return icons[type] || '📄';
+  };
 
   const FileItem = ({ file }) => (
     <li className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -64,10 +83,18 @@ function FileList() {
             </span>
           </div>
         )}
+        <div style={{ display: 'none' }} className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
+          <span className="text-gray-500 text-xs">IMG</span>
+        </div>
         <div>
           <p className="font-medium text-gray-900">{file.original_name}</p>
           <p className="text-sm text-gray-500">
             {file.formatted_size || `${Math.round(file.size / 1024)} KB`}
+            {file.upload_session_id && (
+              <span className="ml-2 text-xs text-blue-600">
+                Session: {file.upload_session_id.slice(-6)}
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -81,9 +108,10 @@ function FileList() {
     </li>
   );
 
-  const FileGroup = ({ title, files, emptyMessage }) => (
+  const FileGroup = ({ title, files, emptyMessage, icon }) => (
     <div className="mb-6">
-      <h3 className="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">
+      <h3 className="text-lg font-semibold text-gray-800 mb-3 border-b pb-2 flex items-center">
+        <span className="mr-2 text-xl">{icon}</span>
         {title} ({files.length})
       </h3>
       {files.length === 0 ? (
@@ -124,21 +152,31 @@ function FileList() {
       )}
 
       <FileGroup 
-        title="Images" 
-        files={files.images || []} 
-        emptyMessage="No images uploaded yet"
+        title={getUploadTypeLabel('financial')}
+        files={files.financial || []} 
+        emptyMessage="No financial documents uploaded yet"
+        icon={getUploadTypeIcon('financial')}
       />
       
       <FileGroup 
-        title="PDFs" 
-        files={files.pdfs || []} 
-        emptyMessage="No PDF files uploaded yet"
+        title={getUploadTypeLabel('travel')}
+        files={files.travel || []} 
+        emptyMessage="No travel documents uploaded yet"
+        icon={getUploadTypeIcon('travel')}
+      />
+
+      <FileGroup 
+        title={getUploadTypeLabel('education')}
+        files={files.education || []} 
+        emptyMessage="No education documents uploaded yet"
+        icon={getUploadTypeIcon('education')}
       />
       
       <FileGroup 
-        title="Other Files" 
-        files={files.others || []} 
+        title={getUploadTypeLabel('other')}
+        files={files.other || []} 
         emptyMessage="No other files uploaded yet"
+        icon={getUploadTypeIcon('other')}
       />
     </div>
   );

@@ -6,6 +6,7 @@ use App\Services\FileService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Http\Requests\FileUploadRequest;
+use App\Models\File;
 use Illuminate\Support\Facades\Log;
 
 class FileController extends Controller
@@ -13,6 +14,58 @@ class FileController extends Controller
     public function __construct(
         private FileService $fileService
     ) {}
+
+
+    public function storeSingle(Request $request): JsonResponse
+    {
+        try {
+
+            $request->validate([
+                'file' => 'required|file|mimes:pdf,png,jpg,jpeg|max:4096',
+                'upload_type' => 'required|in:financial,travel,education',
+                'upload_session_id' => 'required|string',
+                'step_index' => 'required|integer|min:0',
+                'file_index' => 'required|integer|min:0',
+            ]);
+
+            $file = $this->fileService->uploadSingleFile(
+                $request->file('file'),
+                $request->input('upload_type'),
+                $request->input('upload_session_id'),
+                $request->input('step_index'),
+                $request->input('file_index')
+            );
+
+            Log::info('Single file uploaded successfully', [
+                'file_id' => $file->id,
+                'upload_type' => $request->input('upload_type'),
+                'session_id' => $request->input('upload_session_id'),
+                'step_index' => $request->input('step_index'),
+                'file_index' => $request->input('file_index')
+            ]);
+
+            return response()->json($file, 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'details' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Single file upload failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Upload failed. Please try again.'
+            ], 500);
+        }
+    }
+
+    public function getUploadRequirements(): JsonResponse
+    {
+        return response()->json(File::getUploadRequirements());
+    }
 
     public function store(FileUploadRequest $request): JsonResponse
     {
@@ -24,7 +77,6 @@ class FileController extends Controller
                 'original_name' => $file->original_name
             ]);
 
-            
             return response()->json($file, 201);
         } catch (\InvalidArgumentException $e) {
             Log::warning('File upload validation failed', [
