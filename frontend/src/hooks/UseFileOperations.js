@@ -2,66 +2,70 @@ import { useState, useCallback } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-export function useFileOperations() {
+export const useFileOperations = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const uploadFile = useCallback(async (file, uploadType, sessionId, stepIndex, fileIndex) => {
-    // Don't set loading here since we'll be uploading multiple files
+  const clearError = useCallback(() => {
     setError(null);
-    
+  }, []);
+
+  const uploadFile = useCallback(async (file, uploadType, sessionId, fileTypeIndex, fileIndex) => {
+    setLoading(true);
+    setError(null);
+
     try {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('upload_type', uploadType);
       formData.append('upload_session_id', sessionId);
-      formData.append('step_index', stepIndex.toString());
-      formData.append('file_index', fileIndex.toString());
-      
-      const response = await fetch(`${API_URL}/files/single`, {
+      formData.append('file_type_index', fileTypeIndex);
+      formData.append('file_index', fileIndex);
+
+      const response = await fetch(`${API_URL}/files`, {
         method: 'POST',
         body: formData,
       });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Upload failed for ${file.name}`);
-      }
-      
-      return await response.json();
-    } catch (err) {
-      setError(`Failed to upload ${file.name}: ${err.message}`);
-      throw err;
-    }
-  }, []);
 
-  const getUploadRequirements = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_URL}/files/requirements`);
-      
       if (!response.ok) {
-        throw new Error('Failed to fetch upload requirements');
+        let errorMessage = `Upload failed for ${file.name}`;
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (jsonError) {
+          // Server returned non-JSON (likely HTML error page)
+          if (response.status === 413) {
+            errorMessage = `File ${file.name} is too large. Maximum size is 4MB.`;
+          } else {
+            errorMessage = `Upload failed for ${file.name}: Server error (${response.status})`;
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
-      
-      return await response.json();
+
+      const result = await response.json();
+      return result;
     } catch (err) {
       setError(err.message);
       throw err;
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   const fetchFiles = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch(`${API_URL}/files`);
-      
       if (!response.ok) {
         throw new Error('Failed to fetch files');
       }
-      
-      return await response.json();
+      const data = await response.json();
+      return data;
     } catch (err) {
       setError(err.message);
       throw err;
@@ -73,17 +77,16 @@ export function useFileOperations() {
   const deleteFile = useCallback(async (id) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch(`${API_URL}/files/${id}`, {
         method: 'DELETE',
       });
-      
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Delete failed');
+        throw new Error('Failed to delete file');
       }
-      
+
       return await response.json();
     } catch (err) {
       setError(err.message);
@@ -93,17 +96,12 @@ export function useFileOperations() {
     }
   }, []);
 
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
-
   return {
     uploadFile,
-    getUploadRequirements,
     fetchFiles,
     deleteFile,
     loading,
     error,
-    clearError
+    clearError,
   };
-}
+};

@@ -3,52 +3,77 @@ import { useNavigate } from 'react-router-dom';
 import { useFileOperations } from '../hooks/UseFileOperations.js';
 import { LoadingSpinner } from './common/LoadingSpinner.jsx';
 import { ErrorMessage } from './common/ErrorMessage.jsx';
+import { UploadIcon, CheckIcon, DocumentIcon, PlaneIcon, CertificateIcon, FolderIcon } from './common/Icons.jsx';
+
+const requirements = {
+  financial: {
+    label: 'Financial Documents',
+    icon: DocumentIcon,
+    requirements: [
+      { type: 'pdf', count: 1, label: 'Bank Statement (PDF)' },
+      { type: 'image', count: 1, label: 'ID Card Photo' }
+    ]
+  },
+  travel: {
+    label: 'Travel Documents',
+    icon: PlaneIcon,
+    requirements: [
+      { type: 'pdf', count: 1, label: 'Flight Itinerary (PDF)' },
+      { type: 'png', count: 1, label: 'Passport Photo (PNG)' }
+    ]
+  },
+  education: {
+    label: 'Education Documents',
+    icon: CertificateIcon,
+    requirements: [
+      { type: 'pdf', count: 2, label: 'Transcripts & Diploma (2 PDFs)' },
+      { type: 'image', count: 1, label: 'Student ID Photo' }
+    ]
+  },
+  other: {
+    label: 'Other Files',
+    icon: FolderIcon,
+    requirements: [
+      { type: 'pdf', count: 1, label: 'Any PDF Document' },
+      { type: 'image', count: 1, label: 'Any Image File' }
+    ]
+  }
+};
 
 function FileUpload() {
   const [uploadType, setUploadType] = useState('');
   const [pdfFiles, setPdfFiles] = useState([]);
   const [imageFiles, setImageFiles] = useState([]);
-  const [requirements, setRequirements] = useState({});
-  const [sessionId, setSessionId] = useState('');
-  const [success, setSuccess] = useState('');
+  const [sessionId] = useState(() => `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   const [uploadProgress, setUploadProgress] = useState({ pdfs: {}, images: {} });
+  const [success, setSuccess] = useState('');
+  const [countdown, setCountdown] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
   
-  const { uploadFile, getUploadRequirements, loading, error, clearError } = useFileOperations();
+  const { uploadFile, loading, error, clearError } = useFileOperations();
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadRequirements();
+    setIsVisible(true);
   }, []);
 
-  const loadRequirements = async () => {
-    try {
-      const reqs = await getUploadRequirements();
-      setRequirements(reqs);
-    } catch (err) {
-      console.error('Failed to load requirements:', err);
+  useEffect(() => {
+    let interval;
+    if (countdown > 0) {
+      interval = setInterval(() => {
+        setCountdown(prev => prev - 1);
+      }, 1000);
+    } else if (countdown === 0 && success) {
+      navigate('/files');
     }
-  };
-
-  const handleTypeChange = (e) => {
-    const newType = e.target.value;
-    setUploadType(newType);
-    setPdfFiles([]);
-    setImageFiles([]);
-    setSuccess('');
-    clearError();
-    setUploadProgress({ pdfs: {}, images: {} });
-    
-    if (newType) {
-      setSessionId(Date.now().toString() + Math.random().toString(36).substr(2, 9));
-    }
-  };
+    return () => clearInterval(interval);
+  }, [countdown, success, navigate]);
 
   const handlePdfChange = (e) => {
     const files = Array.from(e.target.files);
     setPdfFiles(files);
     clearError();
     
-    // Initialize progress tracking for PDFs
     const progress = {};
     files.forEach((file, index) => {
       progress[index] = { name: file.name, status: 'ready' };
@@ -61,7 +86,6 @@ function FileUpload() {
     setImageFiles(files);
     clearError();
     
-    // Initialize progress tracking for images
     const progress = {};
     files.forEach((file, index) => {
       progress[index] = { name: file.name, status: 'ready' };
@@ -92,13 +116,9 @@ function FileUpload() {
     
     const { pdfRequirement, imageRequirement } = currentReqs;
     
-    // Check PDF requirements
     if (pdfRequirement && pdfFiles.length !== pdfRequirement.count) return false;
-    
-    // Check image requirements
     if (imageRequirement && imageFiles.length !== imageRequirement.count) return false;
     
-    // Validate file types
     const validPdfs = pdfFiles.every(file => file.type === 'application/pdf');
     const validImages = imageFiles.every(file => {
       if (imageRequirement?.type === 'png') return file.type === 'image/png';
@@ -115,7 +135,6 @@ function FileUpload() {
     try {
       const allFiles = [];
       
-      // Upload PDFs first
       for (let i = 0; i < pdfFiles.length; i++) {
         setUploadProgress(prev => ({
           ...prev,
@@ -131,7 +150,6 @@ function FileUpload() {
         }));
       }
       
-      // Upload images
       for (let i = 0; i < imageFiles.length; i++) {
         setUploadProgress(prev => ({
           ...prev,
@@ -148,14 +166,12 @@ function FileUpload() {
       }
       
       setSuccess(`Successfully uploaded ${allFiles.length} files!`);
+      setCountdown(10);
       setPdfFiles([]);
       setImageFiles([]);
       setUploadType('');
       e.target.reset();
       
-      setTimeout(() => {
-        navigate('/files');
-      }, 5000);
     } catch (err) {
       console.error('Upload failed:', err);
     }
@@ -165,295 +181,191 @@ function FileUpload() {
     setUploadType('');
     setPdfFiles([]);
     setImageFiles([]);
-    setSuccess('');
-    setSessionId('');
     setUploadProgress({ pdfs: {}, images: {} });
     clearError();
+    setSuccess('');
+    setCountdown(0);
   };
 
-  if (!uploadType) {
+  const handleContinueNow = () => {
+    setCountdown(0);
+  };
+
+  const renderUploadTypeSelector = () => (
+    <div className={`space-y-4 transition-all duration-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+      <h3 className="text-lg font-medium text-gray-900 mb-4">Select Upload Type</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Object.entries(requirements).map(([key, config]) => {
+          const IconComponent = config.icon;
+          return (
+            <button
+              key={key}
+              onClick={() => setUploadType(key)}
+              className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-300 transform hover:scale-105 text-left group"
+            >
+              <div className="flex items-center space-x-3">
+                <IconComponent className="w-6 h-6 text-gray-600 group-hover:text-blue-600" />
+                <div>
+                  <h4 className="font-medium text-gray-900">{config.label}</h4>
+                  <p className="text-sm text-gray-600">
+                    {config.requirements.map(req => req.label).join(' + ')}
+                  </p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderFileRequirements = () => {
+    const currentReqs = getCurrentRequirements();
+    if (!currentReqs) return null;
+
+    const { pdfRequirement, imageRequirement } = currentReqs;
+    const config = requirements[uploadType];
+    const IconComponent = config.icon;
+
     return (
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold mb-4">Upload Files</h2>
-        
-        <ErrorMessage message={error} onDismiss={clearError} />
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select Upload Type
-          </label>
-          <select
-            value={uploadType}
-            onChange={handleTypeChange}
-            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">Choose what you're uploading...</option>
-            {Object.entries(requirements).map(([key, req]) => (
-              <option key={key} value={key}>
-                {req.label}
-              </option>
-            ))}
-          </select>
+      <div className="space-y-6 animate-slideIn">
+        <div className="flex items-center space-x-3">
+          <IconComponent className="w-6 h-6 text-blue-600" />
+          <h3 className="text-lg font-medium text-gray-900">{config.label}</h3>
         </div>
 
-        {/* Preview of requirements for each type */}
-        <div className="mt-6 space-y-4">
-          {Object.entries(requirements).map(([key, req]) => (
-            <div key={key} className="border border-gray-200 rounded-lg p-4">
-              <h3 className="font-medium text-gray-900 flex items-center mb-2">
-                <span className="mr-2 text-lg">
-                  {key === 'financial' ? '💰' : key === 'travel' ? '✈️' : '🎓'}
-                </span>
-                {req.label}
-              </h3>
-              <p className="text-sm text-gray-600 mb-2">{req.description}</p>
-              <div className="text-sm">
-                <strong>Required files:</strong>
-                <ul className="mt-1 space-y-1">
-                  {req.requirements.map((reqItem, index) => (
-                    <li key={index} className="flex items-center text-gray-700">
-                      <span className="w-2 h-2 bg-blue-400 rounded-full mr-2"></span>
-                      {reqItem.label}
-                    </li>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {pdfRequirement && (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
+                {pdfRequirement.label}
+              </label>
+              <input
+                type="file"
+                accept=".pdf"
+                multiple={pdfRequirement.count > 1}
+                onChange={handlePdfChange}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:transition-colors"
+              />
+              {pdfFiles.length > 0 && (
+                <div className="space-y-2">
+                  {pdfFiles.map((file, index) => (
+                    <div key={index} className="flex items-center space-x-2 text-sm">
+                      <div className="flex-1 flex items-center space-x-2">
+                        <span className="text-gray-700">{file.name}</span>
+                        {uploadProgress.pdfs[index]?.status === 'uploading' && (
+                          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        )}
+                        {uploadProgress.pdfs[index]?.status === 'uploaded' && (
+                          <CheckIcon className="w-4 h-4 text-green-500" />
+                        )}
+                      </div>
+                    </div>
                   ))}
-                </ul>
-              </div>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
+          )}
+
+          {imageRequirement && (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
+                {imageRequirement.label}
+              </label>
+              <input
+                type="file"
+                accept={imageRequirement.type === 'png' ? '.png' : 'image/*'}
+                multiple={imageRequirement.count > 1}
+                onChange={handleImageChange}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:transition-colors"
+              />
+              {imageFiles.length > 0 && (
+                <div className="space-y-2">
+                  {imageFiles.map((file, index) => (
+                    <div key={index} className="flex items-center space-x-2 text-sm">
+                      <div className="flex-1 flex items-center space-x-2">
+                        <span className="text-gray-700">{file.name}</span>
+                        {uploadProgress.images[index]?.status === 'uploading' && (
+                          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        )}
+                        {uploadProgress.images[index]?.status === 'uploaded' && (
+                          <CheckIcon className="w-4 h-4 text-green-500" />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex space-x-3">
+            <button
+              type="submit"
+              disabled={!validateFiles() || loading}
+              className="flex-1 flex items-center justify-center space-x-2 py-3 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105"
+            >
+              {loading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Uploading...</span>
+                </>
+              ) : (
+                <>
+                  <UploadIcon className="w-5 h-5" />
+                  <span>Upload Files</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={resetUpload}
+              className="px-4 py-3 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Reset
+            </button>
+          </div>
+        </form>
       </div>
     );
-  }
-
-  const currentReqs = getCurrentRequirements();
-  const { pdfRequirement, imageRequirement } = currentReqs || {};
+  };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">
-          Upload {requirements[uploadType].label}
-        </h2>
-        <button
-          onClick={resetUpload}
-          className="text-gray-500 hover:text-gray-700 text-sm"
-        >
-          ← Change Type
-        </button>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Upload Files</h2>
+        <p className="text-gray-600">Select your upload type and provide the required documents</p>
       </div>
 
       <ErrorMessage message={error} onDismiss={clearError} />
-      
+
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4">
-          {success}
-          <div className="text-sm mt-1">Redirecting to file list...</div>
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg animate-slideIn">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <CheckIcon className="w-5 h-5 text-green-600" />
+              <span className="text-green-800">{success}</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              {countdown > 0 && (
+                <span className="text-sm text-green-700">
+                  Redirecting in {countdown}s...
+                </span>
+              )}
+              <button
+                onClick={handleContinueNow}
+                className="text-sm text-green-700 hover:text-green-800 underline"
+              >
+                Continue now
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Dual Upload Panels */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* PDF Upload Panel */}
-          {pdfRequirement && (
-            <UploadPanel
-              title="PDF Documents"
-              icon="📄"
-              requirement={pdfRequirement}
-              files={pdfFiles}
-              onFileChange={handlePdfChange}
-              acceptedTypes=".pdf"
-              uploadProgress={uploadProgress.pdfs}
-              loading={loading}
-              color="blue"
-            />
-          )}
+      {loading && <LoadingSpinner message="Uploading files..." />}
 
-          {/* Image Upload Panel */}
-          {imageRequirement && (
-            <UploadPanel
-              title={imageRequirement.type === 'png' ? 'PNG Images' : 'Images (PNG/JPG)'}
-              icon="🖼️"
-              requirement={imageRequirement}
-              files={imageFiles}
-              onFileChange={handleImageChange}
-              acceptedTypes={imageRequirement.type === 'png' ? 'image/png' : 'image/png,image/jpeg'}
-              uploadProgress={uploadProgress.images}
-              loading={loading}
-              color="green"
-            />
-          )}
-        </div>
-
-        {/* Validation Status */}
-        {(pdfFiles.length > 0 || imageFiles.length > 0) && (
-          <div className={`p-4 rounded-lg border ${
-            validateFiles() 
-              ? 'bg-green-50 border-green-200 text-green-700' 
-              : 'bg-red-50 border-red-200 text-red-700'
-          }`}>
-            <div className="flex items-center justify-between">
-              <span className="font-medium">
-                {validateFiles() ? '✅ Ready to upload' : '❌ Please complete all requirements'}
-              </span>
-              <span className="text-sm">
-                Total files: {pdfFiles.length + imageFiles.length}
-              </span>
-            </div>
-            
-            {/* Detailed validation status */}
-            <div className="mt-2 space-y-1 text-sm">
-              {pdfRequirement && (
-                <div className={pdfFiles.length === pdfRequirement.count ? 'text-green-600' : 'text-red-600'}>
-                  PDFs: {pdfFiles.length}/{pdfRequirement.count} required
-                </div>
-              )}
-              {imageRequirement && (
-                <div className={imageFiles.length === imageRequirement.count ? 'text-green-600' : 'text-red-600'}>
-                  Images: {imageFiles.length}/{imageRequirement.count} required
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Submit Button */}
-        <button 
-          type="submit" 
-          disabled={!validateFiles() || loading}
-          className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center font-medium"
-        >
-          {loading ? (
-            <LoadingSpinner size="small" message="Uploading files..." />
-          ) : (
-            `Upload All Files (${pdfFiles.length + imageFiles.length})`
-          )}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-// Reusable Upload Panel Component
-function UploadPanel({ 
-  title, 
-  icon, 
-  requirement, 
-  files, 
-  onFileChange, 
-  acceptedTypes, 
-  uploadProgress, 
-  loading, 
-  color 
-}) {
-  const colorClasses = {
-    blue: {
-      bg: 'bg-blue-50',
-      border: 'border-blue-200',
-      text: 'text-blue-900',
-      accent: 'text-blue-600'
-    },
-    green: {
-      bg: 'bg-green-50',
-      border: 'border-green-200', 
-      text: 'text-green-900',
-      accent: 'text-green-600'
-    }
-  };
-
-  const colors = colorClasses[color] || colorClasses.blue;
-
-  const getFileStatus = (index) => {
-    return uploadProgress[index]?.status || 'ready';
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'uploading': return 'text-yellow-600 bg-yellow-100';
-      case 'uploaded': return 'text-green-600 bg-green-100';
-      case 'error': return 'text-red-600 bg-red-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'uploading': return 'Uploading...';
-      case 'uploaded': return 'Uploaded ✓';
-      case 'error': return 'Error ✗';
-      default: return 'Ready';
-    }
-  };
-
-  return (
-    <div className={`border rounded-lg p-4 ${colors.border} ${colors.bg}`}>
-      <div className="flex items-center mb-3">
-        <span className="text-2xl mr-2">{icon}</span>
-        <h3 className={`text-lg font-semibold ${colors.text}`}>{title}</h3>
-      </div>
-
-      <div className={`mb-4 p-3 bg-white rounded border ${colors.border}`}>
-        <div className={`text-sm ${colors.accent} font-medium mb-1`}>
-          Required: {requirement.count} file{requirement.count > 1 ? 's' : ''}
-        </div>
-        <div className="text-xs text-gray-600">
-          Max 4MB per file
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <input
-          type="file"
-          multiple={requirement.count > 1}
-          accept={acceptedTypes}
-          onChange={onFileChange}
-          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-50 border border-gray-300 rounded-md"
-          disabled={loading}
-        />
-
-        {/* File Preview */}
-        {files.length > 0 && (
-          <div className="space-y-2">
-            <div className={`text-sm font-medium ${colors.text}`}>
-              Selected ({files.length}/{requirement.count}):
-            </div>
-            <div className="space-y-2 max-h-32 overflow-y-auto">
-              {files.map((file, index) => (
-                <div key={index} className="flex items-center justify-between p-2 bg-white rounded border text-sm">
-                  <div className="flex items-center space-x-2 flex-1 min-w-0">
-                    <span className="text-base">{icon}</span>
-                    <span className="truncate font-medium text-gray-700">
-                      {file.name}
-                    </span>
-                    <span className="text-xs text-gray-500 whitespace-nowrap">
-                      ({Math.round(file.size / 1024)} KB)
-                    </span>
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded whitespace-nowrap ${getStatusColor(getFileStatus(index))}`}>
-                    {getStatusText(getFileStatus(index))}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Status indicator */}
-        <div className={`text-center text-sm font-medium ${
-          files.length === requirement.count 
-            ? 'text-green-600' 
-            : files.length > requirement.count 
-            ? 'text-red-600' 
-            : colors.accent
-        }`}>
-          {files.length === requirement.count 
-            ? '✅ Requirement met' 
-            : files.length > requirement.count 
-            ? `❌ Too many files (${files.length}/${requirement.count})`
-            : `${files.length}/${requirement.count} files selected`
-          }
-        </div>
-      </div>
+      {!uploadType ? renderUploadTypeSelector() : renderFileRequirements()}
     </div>
   );
 }
